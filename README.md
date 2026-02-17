@@ -77,3 +77,7 @@ Press the button during a match to emergency stop (returns to IDLE).
 - Use 16 AWG wire for power runs to avoid voltage drop
 - Place 330-ohm resistor between Arduino data pin and LED strip data input
 - Place 1000uF capacitor across +5V/GND at each strip (striped side to GND)
+
+## TODO
+
+- Add mp3 support.
