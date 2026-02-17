@@ -37,6 +37,9 @@ The start button triggers IDLE -> AUTO. After that, all transitions are timer-dr
 - **2x WS2812B LED strips** (30 LEDs per hub default, configurable)
 - **Start button** - green momentary pushbutton (pin 2)
 - **Auto-winner 3-position toggle switch** (pins 4/5) - left = red won auto, center = neutral, right = blue won auto
+- **DFPlayer Mini MP3/WAV player** with micro SD card
+- **Speaker or headphones** for audio output
+- **1kΩ resistor** for DFPlayer RX protection
 - **2x 5V power supplies** for LED strips (60-100W each, separate from Arduino)
 - **2x 330-ohm resistors** on data lines (signal reflection protection)
 - **2x 1000uF capacitors** across power lines (voltage spike protection)
@@ -50,14 +53,18 @@ The start button triggers IDLE -> AUTO. After that, all transitions are timer-dr
 | 5 | Auto-winner switch - blue position (INPUT_PULLUP) |
 | 6 | Red alliance LED strip data |
 | 7 | Blue alliance LED strip data |
+| 10 | DFPlayer serial RX (from DFPlayer TX) |
+| 11 | DFPlayer serial TX (to DFPlayer RX via 1kΩ resistor) |
 
 ## Usage
 
-1. **Install FastLED library** in Arduino IDE
-2. **Upload** `frc_lights_rebuilt.ino` to your Arduino
-3. **Wire** LEDs to pins 6 (red hub) and 7 (blue hub), button to pin 2, toggle switch to pins 4/5
-4. **Press button** to start match -- auto-runs through all phases (2:43 total)
-5. **Set auto-winner switch** before or during Transition to control which hub goes inactive first
+1. **Install libraries** in Arduino IDE: FastLED and DFPlayerMini_Fast
+2. **Prepare SD card** - Format as FAT32, create `MP3` folder, copy audio files from Assets folder as `0001.wav` through `0004.wav`
+3. **Insert SD card** into DFPlayer Mini
+4. **Upload** `frc_lights_rebuilt.ino` to your Arduino
+5. **Wire** LEDs to pins 6 (red hub) and 7 (blue hub), button to pin 2, toggle switch to pins 4/5, DFPlayer to pins 10/11
+6. **Press button** to start match -- auto-runs through all phases (2:43 total)
+7. **Set auto-winner switch** before or during Transition to control which hub goes inactive first
 
 Press the button during a match to emergency stop (returns to IDLE).
 
@@ -77,7 +84,20 @@ Press the button during a match to emergency stop (returns to IDLE).
 - Use 16 AWG wire for power runs to avoid voltage drop
 - Place 330-ohm resistor between Arduino data pin and LED strip data input
 - Place 1000uF capacitor across +5V/GND at each strip (striped side to GND)
+- Use 1kΩ resistor between Arduino pin 11 and DFPlayer RX pin
+- DFPlayer shares 5V and GND with Arduino (powered from Arduino)
+- SD card must be FAT32 format with files in `MP3` folder
 
-## TODO
+## Audio Cues
 
-- Add mp3 support.
+The system plays audio cues at key match moments to help drivers develop auditory recognition of match transitions:
+
+| Sound File | Plays When | Match Phase |
+|------------|-----------|-------------|
+| 0001.wav (start) | AUTO state begins | Match start (0:00) |
+| 0004.wav (end) | AUTO_PAUSE state begins | End of autonomous (0:20) |
+| 0003.wav (resume) | TRANSITION state begins | Teleop starts (0:23) |
+| 0002.wav (warning) | ENDGAME state begins | Endgame warning (2:13) |
+| 0004.wav (end) | MATCH_OVER state begins | Match complete (2:43) |
+
+Audio files are stored on a micro SD card in the DFPlayer Mini. The volume is set to 25 (out of 30) by default and can be adjusted in the code.

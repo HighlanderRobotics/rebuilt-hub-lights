@@ -3,6 +3,8 @@
 // Hardware: Arduino Uno, 2x WS2812B LED strips, start/stop button, auto-winner switch
 
 #include <FastLED.h>
+#include <SoftwareSerial.h>
+#include <DFPlayerMini_Fast.h>
 
 // ==================== PIN DEFINITIONS ====================
 #define BUTTON_PIN 2
@@ -10,6 +12,8 @@
 #define SWITCH_BLUE 5
 #define LED_PIN_RED 6
 #define LED_PIN_BLUE 7
+#define DFPLAYER_RX 10
+#define DFPLAYER_TX 11
 
 // ==================== LED CONFIGURATION ====================
 #define NUM_LEDS_RED 30       // Reduced for Uno memory
@@ -34,6 +38,13 @@
 #define CHASE_SPEED 30
 #define CHASE_WIDTH 5
 
+// ==================== AUDIO FILE NUMBERS ====================
+// Audio file numbers (matching SD card files)
+#define AUDIO_START 1    // 0001.wav - Match start
+#define AUDIO_WARNING 2  // 0002.wav - Endgame warning
+#define AUDIO_RESUME 3   // 0003.wav - Teleop begins
+#define AUDIO_END 4      // 0004.wav - End of auto/match
+
 // ==================== STATE ENUMERATION ====================
 enum MatchState {
   IDLE, AUTO, AUTO_PAUSE, TRANSITION,
@@ -53,6 +64,9 @@ int matchNumber = 0;
 
 CRGB redLeds[NUM_LEDS_RED];
 CRGB blueLeds[NUM_LEDS_BLUE];
+
+SoftwareSerial dfSerial(DFPLAYER_RX, DFPLAYER_TX);
+DFPlayerMini_Fast myMP3;
 
 // ==================== HELPER FUNCTIONS ====================
 
@@ -113,6 +127,29 @@ void enterState(MatchState newState) {
   currentState = newState;
   stateStartTime = millis();
   lastWarningState = false;
+
+  // Trigger sounds for state transitions
+  switch(newState) {
+    case AUTO:
+      myMP3.play(AUDIO_START);  // Play start sound
+      break;
+
+    case AUTO_PAUSE:
+      myMP3.play(AUDIO_END);  // Play end sound (end of auto)
+      break;
+
+    case TRANSITION:
+      myMP3.play(AUDIO_RESUME);  // Play resume sound (teleop begins)
+      break;
+
+    case ENDGAME:
+      myMP3.play(AUDIO_WARNING);  // Play warning sound
+      break;
+
+    case MATCH_OVER:
+      myMP3.play(AUDIO_END);  // Play end sound (match complete)
+      break;
+  }
 
   Serial.println();
   Serial.print(F("STATE: "));
@@ -323,6 +360,19 @@ void setup() {
   Serial.print(NUM_LEDS_RED);
   Serial.print(F("x2"));
   Serial.println();
+
+  // Initialize DFPlayer
+  dfSerial.begin(9600);
+  delay(500);  // Let DFPlayer wake up
+
+  if (!myMP3.begin(dfSerial)) {
+    Serial.println(F("DFPlayer init fail"));
+  } else {
+    Serial.println(F("DFPlayer OK"));
+  }
+
+  myMP3.volume(25);  // Volume 0-30, adjust as needed
+  delay(100);
 
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   pinMode(SWITCH_RED, INPUT_PULLUP);
