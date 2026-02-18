@@ -33,40 +33,12 @@ void loop() {
     return;
   }
 
-  IRData &data = IrReceiver.decodedIRData;
+  // Print decoded result (protocol, address, command, value)
+  IrReceiver.printIRResultShort(&Serial);
 
-  // Print protocol name
-  Serial.print(F("Protocol : "));
-  Serial.println(getProtocolString(data.protocol));
+  // Print raw pulse timings — useful when protocol shows as UNKNOWN
+  IrReceiver.printIRResultRawFormatted(&Serial, true);
 
-  // Print decoded value (hex and decimal)
-  Serial.print(F("Value    : 0x"));
-  Serial.print(data.decodedRawData, HEX);
-  Serial.print(F("  ("));
-  Serial.print(data.decodedRawData, DEC);
-  Serial.println(F(")"));
-
-  // Print address and command fields (useful for NEC / Samsung protocols)
-  Serial.print(F("Address  : 0x"));
-  Serial.println(data.address, HEX);
-  Serial.print(F("Command  : 0x"));
-  Serial.println(data.command, HEX);
-
-  // Print raw pulse timings (useful if protocol shows as UNKNOWN)
-  Serial.print(F("Raw ("));
-  Serial.print(IrReceiver.decodedIRData.rawDataPtr->rawlen - 1);
-  Serial.print(F(" pulses): "));
-  for (uint16_t i = 1; i < IrReceiver.decodedIRData.rawDataPtr->rawlen; i++) {
-    uint16_t us = IrReceiver.decodedIRData.rawDataPtr->rawbuf[i] * MICROS_PER_TICK;
-    if (i % 2 == 1) {
-      Serial.print(F("+"));
-    } else {
-      Serial.print(F("-"));
-    }
-    Serial.print(us);
-    Serial.print(F(" "));
-  }
-  Serial.println();
   Serial.println(F("---"));
 
   IrReceiver.resume();
