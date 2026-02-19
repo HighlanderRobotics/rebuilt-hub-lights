@@ -166,7 +166,6 @@
       Serial.print(F("Playing audio file: "));
       Serial.println(soundFile);
       myMP3.play(soundFile);
-      delay(100);  // Short delay for command to be sent
       Serial.println(F("Audio command sent"));
     }
 
