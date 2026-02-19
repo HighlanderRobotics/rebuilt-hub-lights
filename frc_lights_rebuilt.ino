@@ -23,10 +23,10 @@
   #define AUTOSTART true       // Set to true for auto-start with blue winning auto
 
   // ==================== TIMING CONSTANTS (milliseconds) ====================
-  #define AUTO_DURATION 5000
+  #define AUTO_DURATION 20000
   #define AUTO_PAUSE_DURATION 3000
   #define TRANSITION_DURATION 10000
-  #define SHIFT_DURATION 1000
+  #define SHIFT_DURATION 25000
   #define ENDGAME_DURATION 30000
   #define DEACTIVATION_WARNING 3000
 
@@ -132,31 +132,42 @@
     lastWarningState = false;
 
     // Trigger sounds for state transitions
+    bool shouldPlaySound = false;
+    int soundFile = 0;
+
     switch(newState) {
       case AUTO:
-        myMP3.play(AUDIO_START);  // Play start sound
-        delay(1000);  // Give DFPlayer time to start playing
+        soundFile = AUDIO_START;
+        shouldPlaySound = true;
         break;
 
       case AUTO_PAUSE:
-        myMP3.play(AUDIO_END);  // Play end sound (end of auto)
-        delay(1000);  // Give DFPlayer time to start playing
+        soundFile = AUDIO_END;
+        shouldPlaySound = true;
         break;
 
       case TRANSITION:
-        myMP3.play(AUDIO_RESUME);  // Play resume sound (teleop begins)
-        delay(1000);  // Give DFPlayer time to start playing
+        soundFile = AUDIO_RESUME;
+        shouldPlaySound = true;
         break;
 
       case ENDGAME:
-        myMP3.play(AUDIO_WARNING);  // Play warning sound
-        delay(1000);  // Give DFPlayer time to start playing
+        soundFile = AUDIO_WARNING;
+        shouldPlaySound = true;
         break;
 
       case MATCH_OVER:
-        myMP3.play(AUDIO_END);  // Play end sound (match complete)
-        delay(1000);  // Give DFPlayer time to start playing
+        soundFile = AUDIO_END;
+        shouldPlaySound = true;
         break;
+    }
+
+    if(shouldPlaySound) {
+      Serial.print(F("Playing audio file: "));
+      Serial.println(soundFile);
+      myMP3.play(soundFile);
+      delay(100);  // Short delay for command to be sent
+      Serial.println(F("Audio command sent"));
     }
 
     Serial.println();
