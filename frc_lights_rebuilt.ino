@@ -329,7 +329,8 @@
 
   void setWhiteChase(CRGB* leds, int numLeds, CRGB baseColor) {
     // Create repeating pattern: 5 blue, 5 white, 5 blue, 5 white...
-    int offset = (millis() / CHASE_SPEED) % 10;  // Animation offset
+    // Pattern chases continuously along the strip
+    int offset = (millis() / CHASE_SPEED);  // Continuously increasing offset
 
     for(int i = 0; i < numLeds; i++) {
       // Determine position in the 10-LED pattern (5 blue + 5 white)
