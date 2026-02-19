@@ -24,7 +24,7 @@
 
   // ==================== TIMING CONSTANTS (milliseconds) ====================
   #define AUTO_DURATION 20000
-  #define AUTO_PAUSE_DURATION 3000
+  #define AUTO_PAUSE_DURATION 5000
   #define TRANSITION_DURATION 10000
   #define SHIFT_DURATION 25000
   #define ENDGAME_DURATION 30000
