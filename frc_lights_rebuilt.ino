@@ -508,12 +508,32 @@
 
     // Check for received IR signals
     if (IrReceiver.decode()) {
-      Serial.print(F("IR Received - Protocol: "));
-      Serial.print(IrReceiver.decodedIRData.protocol);
-      Serial.print(F(" Address: 0x"));
-      Serial.print(IrReceiver.decodedIRData.address, HEX);
-      Serial.print(F(" Command: 0x"));
-      Serial.println(IrReceiver.decodedIRData.command, HEX);
+      Serial.print(F("IR Received: "));
+
+      // Decode and print friendly command names
+      switch(IrReceiver.decodedIRData.command) {
+        case 0x1F:
+          Serial.println(F("Start"));
+          break;
+        case 0x20:
+          Serial.println(F("Stop"));
+          break;
+        case 0x23:
+          Serial.println(F("P1"));
+          break;
+        case 0x24:
+          Serial.println(F("P2"));
+          break;
+        case 0x25:
+          Serial.println(F("P3"));
+          break;
+        default:
+          Serial.print(F("Unknown (0x"));
+          Serial.print(IrReceiver.decodedIRData.command, HEX);
+          Serial.println(F(")"));
+          break;
+      }
+
       IrReceiver.resume();  // Ready for next signal
     }
 
