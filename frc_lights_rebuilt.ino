@@ -5,6 +5,7 @@
   #include <FastLED.h>
   #include <SoftwareSerial.h>
   #include <DFPlayerMini_Fast.h>
+  #include <IRremote.hpp>
 
   // ==================== PIN DEFINITIONS ====================
   #define BUTTON_PIN 2
@@ -12,6 +13,8 @@
   #define SWITCH_BLUE 5
   #define LED_PIN_RED 6
   #define LED_PIN_BLUE 7
+  #define IR_RECEIVE_PIN 8
+  #define IR_SEND_PIN 3
   #define DFPLAYER_RX 10
   #define DFPLAYER_TX 11
 
@@ -47,6 +50,15 @@
   #define AUDIO_WARNING 2  // 0002.wav - Endgame warning
   #define AUDIO_RESUME 3   // 0003.wav - Teleop begins
   #define AUDIO_END 4      // 0004.wav - End of auto/match
+
+  // ==================== IR TIMER CONTROL ====================
+  #define IR_PROTOCOL 8    // Protocol for timer communication
+  #define IR_ADDRESS 0x22  // Address for timer
+  #define IR_CMD_RESET 0x23     // Reset timer
+  #define IR_CMD_STOP 0x20      // Stop timer
+  #define IR_CMD_START 0x1F     // Start timer
+  #define IR_CMD_AUTO_END 0x24  // Auto phase end
+  #define IR_CMD_TELEOP_START 0x25  // Teleop phase start
 
   // ==================== STATE ENUMERATION ====================
   enum MatchState {
@@ -126,6 +138,13 @@
     return (const char*)pgm_read_word(&str_UNKNOWN);
   }
 
+  void sendIRCommand(uint8_t command) {
+    IrSender.sendRC5(IR_ADDRESS, command, 0, true);
+    Serial.print(F("IR Sent: 0x"));
+    Serial.println(command, HEX);
+    delay(100);  // Small delay between IR commands
+  }
+
   void enterState(MatchState newState) {
     currentState = newState;
     stateStartTime = millis();
@@ -167,6 +186,28 @@
       Serial.println(soundFile);
       myMP3.play(soundFile);
       Serial.println(F("Audio command sent"));
+    }
+
+    // Send IR commands to timer based on state
+    switch(newState) {
+      case AUTO:
+        sendIRCommand(IR_CMD_START);  // Start timer when auto begins
+        break;
+
+      case AUTO_PAUSE:
+        sendIRCommand(IR_CMD_AUTO_END);  // Signal auto phase end
+        sendIRCommand(IR_CMD_START);     // Continue timer
+        break;
+
+      case TRANSITION:
+        sendIRCommand(IR_CMD_TELEOP_START);  // Signal teleop phase start
+        sendIRCommand(IR_CMD_START);          // Continue timer
+        break;
+
+      case MATCH_OVER:
+        sendIRCommand(IR_CMD_RESET);  // Reset timer
+        sendIRCommand(IR_CMD_STOP);   // Stop timer
+        break;
     }
 
     Serial.println();
@@ -399,6 +440,15 @@
     myMP3.volume(25);  // Volume 0-30, adjust as needed
     delay(100);
 
+    // Initialize IR transmitter and receiver
+    IrSender.begin(IR_SEND_PIN);
+    IrReceiver.begin(IR_RECEIVE_PIN, ENABLE_LED_FEEDBACK);
+    Serial.println(F("IR initialized"));
+
+    // Send initial timer commands (reset and stop)
+    sendIRCommand(IR_CMD_RESET);
+    sendIRCommand(IR_CMD_STOP);
+
     pinMode(BUTTON_PIN, INPUT_PULLUP);
     pinMode(SWITCH_RED, INPUT_PULLUP);
     pinMode(SWITCH_BLUE, INPUT_PULLUP);
@@ -455,6 +505,17 @@
     }
 
     updateLights();
+
+    // Check for received IR signals
+    if (IrReceiver.decode()) {
+      Serial.print(F("IR Received - Protocol: "));
+      Serial.print(IrReceiver.decodedIRData.protocol);
+      Serial.print(F(" Address: 0x"));
+      Serial.print(IrReceiver.decodedIRData.address, HEX);
+      Serial.print(F(" Command: 0x"));
+      Serial.println(IrReceiver.decodedIRData.command, HEX);
+      IrReceiver.resume();  // Ready for next signal
+    }
 
     delay(10);
   }
