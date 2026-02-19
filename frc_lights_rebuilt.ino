@@ -19,14 +19,14 @@
   #define DFPLAYER_TX 11
 
   // ==================== LED CONFIGURATION ====================
-  #define NUM_LEDS_RED 30       // Reduced for Uno memory
-  #define NUM_LEDS_BLUE 30      // Can increase to 60 with Arduino Mega
+  #define NUM_LEDS_RED 160       // Reduced for Uno memory
+  #define NUM_LEDS_BLUE 160      // Can increase to 60 with Arduino Mega
 
   // ==================== DEBUG CONFIGURATION ====================
   #define AUTOSTART true       // Set to true for auto-start with blue winning auto
 
   // ==================== TIMING CONSTANTS (milliseconds) ====================
-  #define AUTO_DURATION 20000
+  #define AUTO_DURATION 2000
   #define AUTO_PAUSE_DURATION 5000
   #define TRANSITION_DURATION 10000
   #define SHIFT_DURATION 25000
@@ -40,8 +40,8 @@
   #define PURPLE_COLOR CRGB(50, 0, 50)
 
   // ==================== ANIMATION TUNING ====================
-  #define PULSE_SPEED 150.0
-  #define CHASE_SPEED 30
+  #define PULSE_SPEED 50.0
+  #define CHASE_SPEED 5
   #define CHASE_WIDTH 5
 
   // ==================== AUDIO FILE NUMBERS ====================
@@ -328,17 +328,17 @@
   }
 
   void setWhiteChase(CRGB* leds, int numLeds, CRGB baseColor) {
-    int chasePosition = (millis() / CHASE_SPEED) % numLeds;
+    // Create repeating pattern: 5 blue, 5 white, 5 blue, 5 white...
+    int offset = (millis() / CHASE_SPEED) % 10;  // Animation offset
 
     for(int i = 0; i < numLeds; i++) {
-      leds[i] = baseColor;
+      // Determine position in the 10-LED pattern (5 blue + 5 white)
+      int patternPosition = (i + offset) % 10;
 
-      int distFromChase = abs(i - chasePosition);
-      if(distFromChase > numLeds / 2) {
-        distFromChase = numLeds - distFromChase;
-      }
-
-      if(distFromChase < CHASE_WIDTH) {
+      // First 5 positions are blue, next 5 are white
+      if(patternPosition < 5) {
+        leds[i] = baseColor;
+      } else {
         leds[i] = CRGB::White;
       }
     }
