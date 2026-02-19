@@ -19,8 +19,8 @@
   #define DFPLAYER_TX 11
 
   // ==================== LED CONFIGURATION ====================
-  #define NUM_LEDS_RED 160       // Reduced for Uno memory
-  #define NUM_LEDS_BLUE 160      // Can increase to 60 with Arduino Mega
+  #define NUM_LEDS_RED 30       // Optimized for Uno memory
+  #define NUM_LEDS_BLUE 30      // Use Arduino Mega for more LEDs
 
   // ==================== DEBUG CONFIGURATION ====================
   #define AUTOSTART true       // Set to true for auto-start with blue winning auto
@@ -140,9 +140,7 @@
 
   void sendIRCommand(uint8_t command) {
     IrSender.sendRC5(IR_ADDRESS, command, 0, true);
-    Serial.print(F("IR Sent: 0x"));
-    Serial.println(command, HEX);
-    delay(100);  // Small delay between IR commands
+    delay(100);
   }
 
   void enterState(MatchState newState) {
@@ -182,10 +180,7 @@
     }
 
     if(shouldPlaySound) {
-      Serial.print(F("Playing audio file: "));
-      Serial.println(soundFile);
       myMP3.play(soundFile);
-      Serial.println(F("Audio command sent"));
     }
 
     // Send IR commands to timer based on state
@@ -220,23 +215,16 @@
     // Read auto-winner switch
     if(newState == TRANSITION) {
       if(AUTOSTART) {
-        // Autostart mode: blue always wins
         redWonAuto = false;
-        Serial.println(F("Auto: BLUE (autostart)"));
       } else {
-        // Normal mode: read switch
         bool redPin = digitalRead(SWITCH_RED);
         bool bluePin = digitalRead(SWITCH_BLUE);
-
         if(redPin == LOW && bluePin == HIGH) {
           redWonAuto = true;
-          Serial.println(F("Auto: RED"));
         } else if(bluePin == LOW && redPin == HIGH) {
           redWonAuto = false;
-          Serial.println(F("Auto: BLUE"));
         } else {
           redWonAuto = true;
-          Serial.println(F("Auto: NEUTRAL"));
         }
       }
     }
@@ -245,21 +233,6 @@
     if(newState == AUTO) {
       matchStartTime = millis();
       matchNumber++;
-      Serial.print(F("MATCH #"));
-      Serial.println(matchNumber);
-    }
-
-    // Print hub status for shifts
-    if(newState >= SHIFT_1 && newState <= SHIFT_4) {
-      int shiftNum = newState - SHIFT_1 + 1;
-      bool redActive = redWonAuto ? ((shiftNum - 1) % 2 == 1) : ((shiftNum - 1) % 2 == 0);
-
-      Serial.print(F("S"));
-      Serial.print(shiftNum);
-      Serial.print(F(": R="));
-      Serial.print(redActive ? 1 : 0);
-      Serial.print(F(" B="));
-      Serial.println(redActive ? 0 : 1);
     }
 
     // Match completion
@@ -281,29 +254,6 @@
 
   // ==================== DEBUG FUNCTIONS ====================
 
-  void printPeriodicStatus() {
-    unsigned long now = millis();
-
-    if(now - lastDebugTime >= 2000) {
-      lastDebugTime = now;
-
-      unsigned long stateElapsed = now - stateStartTime;
-      unsigned long stateDuration = getStateDuration(currentState);
-
-      Serial.print(F("["));
-      Serial.print(now / 1000);
-      Serial.print(F("s]"));
-
-      if(stateDuration != 0xFFFFFFFF) {
-        unsigned long remaining = stateDuration - stateElapsed;
-        Serial.print(F(" -"));
-        Serial.print(remaining / 1000);
-        Serial.print(F("s"));
-      }
-
-      Serial.println();
-    }
-  }
 
   // ==================== LIGHT ANIMATION FUNCTIONS ====================
 
@@ -380,7 +330,6 @@
         bool inWarning = (stateElapsed >= stateDuration - DEACTIVATION_WARNING);
 
         if(inWarning && !lastWarningState) {
-          Serial.println(F("!PULSE!"));
           lastWarningState = true;
         }
 
@@ -421,30 +370,18 @@
     Serial.begin(9600);
     delay(500);
 
-    Serial.println();
     Serial.println(F("FRC Hub Lights"));
-    Serial.print(F("LEDs: "));
-    Serial.print(NUM_LEDS_RED);
-    Serial.print(F("x2"));
-    Serial.println();
 
     // Initialize DFPlayer
     dfSerial.begin(9600);
-    delay(500);  // Let DFPlayer wake up
-
-    if (!myMP3.begin(dfSerial)) {
-      Serial.println(F("DFPlayer init fail"));
-    } else {
-      Serial.println(F("DFPlayer OK"));
-    }
-
-    myMP3.volume(25);  // Volume 0-30, adjust as needed
+    delay(500);
+    myMP3.begin(dfSerial);
+    myMP3.volume(25);
     delay(100);
 
     // Initialize IR transmitter and receiver
     IrSender.begin(IR_SEND_PIN);
     IrReceiver.begin(IR_RECEIVE_PIN, ENABLE_LED_FEEDBACK);
-    Serial.println(F("IR initialized"));
 
     // Send initial timer commands (reset and stop)
     sendIRCommand(IR_CMD_RESET);
@@ -458,21 +395,11 @@
     FastLED.addLeds<WS2812B, LED_PIN_BLUE, GRB>(blueLeds, NUM_LEDS_BLUE);
     FastLED.setBrightness(80);
 
-    Serial.print(F("Pins: Btn="));
-    Serial.print(BUTTON_PIN);
-    Serial.print(F(" Sw="));
-    Serial.print(SWITCH_RED);
-    Serial.print(F(","));
-    Serial.println(SWITCH_BLUE);
-
     if(AUTOSTART) {
-      Serial.println(F("AUTOSTART MODE"));
       enterState(AUTO);
     } else {
       enterState(IDLE);
-      Serial.println(F("READY! Press to start"));
     }
-    Serial.println();
   }
 
   // ==================== MAIN LOOP ====================
@@ -480,14 +407,9 @@
     bool currentButtonState = digitalRead(BUTTON_PIN);
 
     if(lastButtonState == HIGH && currentButtonState == LOW) {
-      Serial.println();
-      Serial.println(F("*** BUTTON ***"));
-
       if(currentState == IDLE || currentState == MATCH_OVER) {
-        Serial.println(F("START"));
         enterState(AUTO);
       } else {
-        Serial.println(F("STOP"));
         enterState(IDLE);
       }
     }
@@ -499,10 +421,6 @@
     if(stateElapsed >= stateDuration) {
       MatchState nextState = getNextState(currentState);
       enterState(nextState);
-    }
-
-    if(currentState != IDLE && currentState != MATCH_OVER) {
-      printPeriodicStatus();
     }
 
     updateLights();
