@@ -139,7 +139,7 @@
   }
 
   void sendIRCommand(uint8_t command) {
-    IrSender.sendRC5(IR_ADDRESS, command, 0, true);
+    IrSender.sendNEC(IR_ADDRESS, command, 0);
     delay(100);
   }
 
