@@ -186,22 +186,11 @@
     // Send IR commands to timer based on state
     switch(newState) {
       case AUTO:
-        sendIRCommand(IR_CMD_START);  // Start timer when auto begins
-        break;
-
-      case AUTO_PAUSE:
-        sendIRCommand(IR_CMD_AUTO_END);  // Signal auto phase end
-        sendIRCommand(IR_CMD_START);     // Continue timer
-        break;
-
-      case TRANSITION:
-        sendIRCommand(IR_CMD_TELEOP_START);  // Signal teleop phase start
-        sendIRCommand(IR_CMD_START);          // Continue timer
+        sendIRCommand(IR_CMD_START);  // Start timer (0x1F)
         break;
 
       case MATCH_OVER:
-        sendIRCommand(IR_CMD_RESET);  // Reset timer
-        sendIRCommand(IR_CMD_STOP);   // Stop timer
+        sendIRCommand(IR_CMD_RESET);  // End timer (0x23)
         break;
     }
 
@@ -385,10 +374,6 @@
     // Initialize IR transmitter and receiver
     IrSender.begin(IR_SEND_PIN);
     IrReceiver.begin(IR_RECEIVE_PIN, ENABLE_LED_FEEDBACK);
-
-    // Send initial timer commands (reset and stop)
-    sendIRCommand(IR_CMD_RESET);
-    sendIRCommand(IR_CMD_STOP);
 
     pinMode(BUTTON_PIN, INPUT_PULLUP);
     pinMode(SWITCH_RED, INPUT_PULLUP);
