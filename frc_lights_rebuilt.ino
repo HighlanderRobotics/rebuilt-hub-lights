@@ -26,7 +26,7 @@
   #define AUTOSTART true       // Set to true for auto-start with blue winning auto
 
   // ==================== TIMING CONSTANTS (milliseconds) ====================
-  #define AUTO_DURATION 2000
+  #define AUTO_DURATION 20000
   #define AUTO_PAUSE_DURATION 5000
   #define TRANSITION_DURATION 10000
   #define SHIFT_DURATION 25000
@@ -41,7 +41,7 @@
 
   // ==================== ANIMATION TUNING ====================
   #define PULSE_SPEED 50.0
-  #define CHASE_SPEED 5
+  #define CHASE_SPEED 30
   #define CHASE_WIDTH 5
 
   // ==================== AUDIO FILE NUMBERS ====================
@@ -329,12 +329,15 @@
         bool redActive = redWonAuto ? (shiftNum % 2 == 1) : (shiftNum % 2 == 0);
         bool inWarning = (stateElapsed >= stateDuration - DEACTIVATION_WARNING);
 
+        // Don't pulse during SHIFT_4 warning (smooth transition to ENDGAME)
+        bool shouldPulse = inWarning && (currentState != SHIFT_4);
+
         if(inWarning && !lastWarningState) {
           lastWarningState = true;
         }
 
         if(redActive) {
-          if(inWarning) {
+          if(shouldPulse) {
             setPulsingColor(redLeds, NUM_LEDS_RED, RED_COLOR);
           } else {
             setSolidColor(redLeds, NUM_LEDS_RED, RED_COLOR);
@@ -342,7 +345,7 @@
           setSolidColor(blueLeds, NUM_LEDS_BLUE, CRGB::Black);
         } else {
           setSolidColor(redLeds, NUM_LEDS_RED, CRGB::Black);
-          if(inWarning) {
+          if(shouldPulse) {
             setPulsingColor(blueLeds, NUM_LEDS_BLUE, BLUE_COLOR);
           } else {
             setSolidColor(blueLeds, NUM_LEDS_BLUE, BLUE_COLOR);
