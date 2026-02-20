@@ -183,15 +183,9 @@
       myMP3.play(soundFile);
     }
 
-    // Send IR commands to timer based on state
-    switch(newState) {
-      case AUTO:
-        sendIRCommand(IR_CMD_START);  // Start timer (0x1F)
-        break;
-
-      case MATCH_OVER:
-        sendIRCommand(IR_CMD_RESET);  // End timer (0x23)
-        break;
+    // Send IR command when match starts
+    if(newState == AUTO) {
+      sendIRCommand(IR_CMD_START);  // Start timer (0x1F)
     }
 
     Serial.println();
