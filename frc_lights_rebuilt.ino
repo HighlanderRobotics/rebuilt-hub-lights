@@ -13,14 +13,13 @@
   #define SWITCH_BLUE 5
   #define LED_PIN_RED 6
   #define LED_PIN_BLUE 7
-  #define IR_RECEIVE_PIN 8
   #define IR_SEND_PIN 3
   #define DFPLAYER_RX 10
   #define DFPLAYER_TX 11
 
   // ==================== LED CONFIGURATION ====================
-  #define NUM_LEDS_RED 30       // Optimized for Uno memory
-  #define NUM_LEDS_BLUE 30      // Use Arduino Mega for more LEDs
+  #define NUM_LEDS_RED 200       // Optimized for Uno memory
+  #define NUM_LEDS_BLUE 200      // Use Arduino Mega for more LEDs
 
   // ==================== DEBUG CONFIGURATION ====================
   #define AUTOSTART true       // Set to true for auto-start with blue winning auto
@@ -52,13 +51,8 @@
   #define AUDIO_END 4      // 0004.wav - End of auto/match
 
   // ==================== IR TIMER CONTROL ====================
-  #define IR_PROTOCOL 8    // Protocol for timer communication
-  #define IR_ADDRESS 0x22  // Address for timer
-  #define IR_CMD_RESET 0x23     // Reset timer
-  #define IR_CMD_STOP 0x20      // Stop timer
-  #define IR_CMD_START 0x1F     // Start timer
-  #define IR_CMD_AUTO_END 0x24  // Auto phase end
-  #define IR_CMD_TELEOP_START 0x25  // Teleop phase start
+  #define IR_ADDRESS 0x22
+  #define IR_CMD_START 0x1F
 
   // ==================== STATE ENUMERATION ====================
   enum MatchState {
@@ -72,10 +66,7 @@
   unsigned long stateStartTime = 0;
   bool lastButtonState = HIGH;
   bool redWonAuto = false;
-  unsigned long lastDebugTime = 0;
   bool lastWarningState = false;
-  unsigned long matchStartTime = 0;
-  int matchNumber = 0;
 
   CRGB redLeds[NUM_LEDS_RED];
   CRGB blueLeds[NUM_LEDS_BLUE];
@@ -112,36 +103,6 @@
     }
   }
 
-  // State names stored in Flash memory to save SRAM
-  const char str_IDLE[] PROGMEM = "IDLE";
-  const char str_AUTO[] PROGMEM = "AUTO";
-  const char str_AUTO_PAUSE[] PROGMEM = "AUTOPAUSE";
-  const char str_TRANSITION[] PROGMEM = "TRANS";
-  const char str_SHIFT_1[] PROGMEM = "SHIFT1";
-  const char str_SHIFT_2[] PROGMEM = "SHIFT2";
-  const char str_SHIFT_3[] PROGMEM = "SHIFT3";
-  const char str_SHIFT_4[] PROGMEM = "SHIFT4";
-  const char str_ENDGAME[] PROGMEM = "ENDGAME";
-  const char str_MATCH_OVER[] PROGMEM = "DONE";
-  const char str_UNKNOWN[] PROGMEM = "???";
-
-  const char* const stateNames[] PROGMEM = {
-    str_IDLE, str_AUTO, str_AUTO_PAUSE, str_TRANSITION,
-    str_SHIFT_1, str_SHIFT_2, str_SHIFT_3, str_SHIFT_4,
-    str_ENDGAME, str_MATCH_OVER
-  };
-
-  const char* stateName(MatchState state) {
-    if(state >= 0 && state <= MATCH_OVER) {
-      return (const char*)pgm_read_word(&(stateNames[state]));
-    }
-    return (const char*)pgm_read_word(&str_UNKNOWN);
-  }
-
-  void sendIRCommand(uint8_t command) {
-    IrSender.sendNEC(IR_ADDRESS, command, 0);
-    delay(100);
-  }
 
   void enterState(MatchState newState) {
     currentState = newState;
@@ -185,15 +146,9 @@
 
     // Send IR command when match starts
     if(newState == AUTO) {
-      sendIRCommand(IR_CMD_START);  // Start timer (0x1F)
+      IrSender.sendNEC(IR_ADDRESS, IR_CMD_START, 0);
+      delay(100);
     }
-
-    Serial.println();
-    Serial.print(F("STATE: "));
-    Serial.print(stateName(newState));
-    Serial.print(F(" @ "));
-    Serial.print(millis() / 1000);
-    Serial.println(F("s"));
 
     // Read auto-winner switch
     if(newState == TRANSITION) {
@@ -212,27 +167,6 @@
       }
     }
 
-    // Track match start
-    if(newState == AUTO) {
-      matchStartTime = millis();
-      matchNumber++;
-    }
-
-    // Match completion
-    if(newState == MATCH_OVER) {
-      unsigned long totalTime = millis() - matchStartTime;
-      Serial.print(F("DONE! T="));
-      Serial.print(totalTime / 1000);
-      Serial.print(F("s"));
-      int delta = totalTime / 1000 - 163;
-      if(delta != 0) {
-        Serial.print(F(" ["));
-        if(delta > 0) Serial.print(F("+"));
-        Serial.print(delta);
-        Serial.print(F("]"));
-      }
-      Serial.println();
-    }
   }
 
   // ==================== DEBUG FUNCTIONS ====================
@@ -356,8 +290,6 @@
     Serial.begin(9600);
     delay(500);
 
-    Serial.println(F("FRC Hub Lights"));
-
     // Initialize DFPlayer
     dfSerial.begin(9600);
     delay(500);
@@ -365,9 +297,8 @@
     myMP3.volume(25);
     delay(100);
 
-    // Initialize IR transmitter and receiver
+    // Initialize IR transmitter
     IrSender.begin(IR_SEND_PIN);
-    IrReceiver.begin(IR_RECEIVE_PIN, ENABLE_LED_FEEDBACK);
 
     pinMode(BUTTON_PIN, INPUT_PULLUP);
     pinMode(SWITCH_RED, INPUT_PULLUP);
@@ -406,37 +337,5 @@
     }
 
     updateLights();
-
-    // Check for received IR signals
-    if (IrReceiver.decode()) {
-      Serial.print(F("IR Received: "));
-
-      // Decode and print friendly command names
-      switch(IrReceiver.decodedIRData.command) {
-        case 0x1F:
-          Serial.println(F("Start"));
-          break;
-        case 0x20:
-          Serial.println(F("Stop"));
-          break;
-        case 0x23:
-          Serial.println(F("P1"));
-          break;
-        case 0x24:
-          Serial.println(F("P2"));
-          break;
-        case 0x25:
-          Serial.println(F("P3"));
-          break;
-        default:
-          Serial.print(F("Unknown (0x"));
-          Serial.print(IrReceiver.decodedIRData.command, HEX);
-          Serial.println(F(")"));
-          break;
-      }
-
-      IrReceiver.resume();  // Ready for next signal
-    }
-
     delay(10);
   }
