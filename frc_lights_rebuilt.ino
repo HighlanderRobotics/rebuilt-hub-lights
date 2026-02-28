@@ -18,17 +18,20 @@
   #define DFPLAYER_TX 11
 
   // ==================== LED CONFIGURATION ====================
-  #define NUM_LEDS_RED 200       // Optimized for Uno memory
-  #define NUM_LEDS_BLUE 200      // Use Arduino Mega for more LEDs
+  #define NUM_LEDS_RED 640       // Optimized for Uno memory
+  #define NUM_LEDS_BLUE 640      // Use Arduino Mega for more LEDs
 
   // ==================== DEBUG CONFIGURATION ====================
-  #define AUTOSTART true       // Set to true for auto-start with blue winning auto
+  #define AUTOSTART false       // Skip IDLE, start match immediately on power-up
+  #define FORCE_BLUE_AUTO false // Force blue to win auto regardless of physical switch
+  #define DEBOUNCE_TIME 80     // Button debounce threshold in ms — prevents EMI false triggers
+  #define STATUS_INTERVAL 2000 // Periodic status print interval in ms
 
   // ==================== TIMING CONSTANTS (milliseconds) ====================
   #define AUTO_DURATION 20000
-  #define AUTO_PAUSE_DURATION 5000
-  #define TRANSITION_DURATION 10000
-  #define SHIFT_DURATION 25000
+  #define AUTO_PAUSE_DURATION 3000
+  #define TRANSITION_DURATION 10500
+  #define SHIFT_DURATION 25400
   #define ENDGAME_DURATION 30000
   #define DEACTIVATION_WARNING 3000
 
@@ -52,7 +55,6 @@
 
   // ==================== IR TIMER CONTROL ====================
   #define IR_ADDRESS 0x22
-  #define IR_CMD_START 0x1F
 
   // ==================== STATE ENUMERATION ====================
   enum MatchState {
@@ -67,12 +69,107 @@
   bool lastButtonState = HIGH;
   bool redWonAuto = false;
   bool lastWarningState = false;
+  unsigned long lastButtonPressTime = 0;
+  unsigned long lastStatusPrint = 0;
+  int currentAudio = 0;
 
   CRGB redLeds[NUM_LEDS_RED];
   CRGB blueLeds[NUM_LEDS_BLUE];
 
   SoftwareSerial dfSerial(DFPLAYER_RX, DFPLAYER_TX);
   DFPlayerMini_Fast myMP3;
+
+  // ==================== DEBUG FUNCTIONS ====================
+
+  void printStateName(MatchState state) {
+    switch(state) {
+      case IDLE:       Serial.print(F("IDLE"));       break;
+      case AUTO:       Serial.print(F("AUTO"));       break;
+      case AUTO_PAUSE: Serial.print(F("AUTO_PAUSE")); break;
+      case TRANSITION: Serial.print(F("TRANSITION")); break;
+      case SHIFT_1:    Serial.print(F("SHIFT_1"));    break;
+      case SHIFT_2:    Serial.print(F("SHIFT_2"));    break;
+      case SHIFT_3:    Serial.print(F("SHIFT_3"));    break;
+      case SHIFT_4:    Serial.print(F("SHIFT_4"));    break;
+      case ENDGAME:    Serial.print(F("ENDGAME"));    break;
+      case MATCH_OVER: Serial.print(F("MATCH_OVER")); break;
+      default:         Serial.print(F("UNKNOWN"));    break;
+    }
+  }
+
+  void printAudioName(int fileNum) {
+    switch(fileNum) {
+      case AUDIO_START:   Serial.print(F("match start"));    break;
+      case AUDIO_WARNING: Serial.print(F("endgame warning")); break;
+      case AUDIO_RESUME:  Serial.print(F("teleop begins"));  break;
+      case AUDIO_END:     Serial.print(F("match end"));      break;
+      default:            Serial.print(F("none"));           break;
+    }
+  }
+
+  void printHubColor(bool redHub) {
+    switch(currentState) {
+      case IDLE:
+        Serial.print(F("dim purple"));
+        break;
+      case AUTO:
+      case AUTO_PAUSE:
+        Serial.print(redHub ? F("red") : F("blue"));
+        break;
+      case TRANSITION:
+        if(redHub) Serial.print(redWonAuto ? F("white chase") : F("red"));
+        else       Serial.print(redWonAuto ? F("blue") : F("white chase"));
+        break;
+      case SHIFT_1: case SHIFT_2: case SHIFT_3: case SHIFT_4: {
+        int shiftNum = currentState - SHIFT_1;
+        bool redActive = redWonAuto ? (shiftNum % 2 == 1) : (shiftNum % 2 == 0);
+        bool active = redHub ? redActive : !redActive;
+        unsigned long elapsed = millis() - stateStartTime;
+        bool inWarning = elapsed >= SHIFT_DURATION - DEACTIVATION_WARNING;
+        bool shouldPulse = inWarning && (currentState != SHIFT_4);
+        if(!active) { Serial.print(F("off")); break; }
+        if(shouldPulse) Serial.print(redHub ? F("pulsing red") : F("pulsing blue"));
+        else            Serial.print(redHub ? F("red") : F("blue"));
+        break;
+      }
+      case ENDGAME:
+        Serial.print(redHub ? F("red") : F("blue"));
+        break;
+      case MATCH_OVER:
+        Serial.print(F("green"));
+        break;
+    }
+  }
+
+  void printPeriodicStatus() {
+    unsigned long now = millis();
+    if(now - lastStatusPrint < STATUS_INTERVAL) return;
+    lastStatusPrint = now;
+
+    unsigned long elapsed = now - stateStartTime;
+    unsigned long duration = 0;
+    switch(currentState) {
+      case AUTO: duration = AUTO_DURATION; break;
+      case AUTO_PAUSE: duration = AUTO_PAUSE_DURATION; break;
+      case TRANSITION: duration = TRANSITION_DURATION; break;
+      case SHIFT_1: case SHIFT_2: case SHIFT_3: case SHIFT_4: duration = SHIFT_DURATION; break;
+      case ENDGAME: duration = ENDGAME_DURATION; break;
+      default: break;
+    }
+
+    Serial.print(F("["));
+    Serial.print(now / 1000);
+    Serial.print(F("s] "));
+    printStateName(currentState);
+    Serial.print(F(" | "));
+    Serial.print(elapsed / 1000);
+    Serial.print(F("s"));
+    if(duration > 0) { Serial.print(F("/")); Serial.print(duration / 1000); Serial.print(F("s")); }
+    Serial.print(F(" | Red: ")); printHubColor(true);
+    Serial.print(F("  Blue: ")); printHubColor(false);
+    Serial.print(F(" | Audio: ")); printAudioName(currentAudio);
+    Serial.println();
+  }
 
   // ==================== HELPER FUNCTIONS ====================
 
@@ -105,6 +202,15 @@
 
 
   void enterState(MatchState newState) {
+    // Log the transition
+    Serial.print(F("["));
+    Serial.print(millis() / 1000);
+    Serial.print(F("s] "));
+    printStateName(currentState);
+    Serial.print(F(" -> "));
+    printStateName(newState);
+    Serial.println();
+
     currentState = newState;
     stateStartTime = millis();
     lastWarningState = false;
@@ -142,17 +248,15 @@
 
     if(shouldPlaySound) {
       myMP3.play(soundFile);
-    }
-
-    // Send IR command when match starts
-    if(newState == AUTO) {
-      IrSender.sendNEC(IR_ADDRESS, IR_CMD_START, 0);
-      delay(100);
+      currentAudio = soundFile;
+      Serial.print(F("  Audio: "));
+      printAudioName(soundFile);
+      Serial.println();
     }
 
     // Read auto-winner switch
     if(newState == TRANSITION) {
-      if(AUTOSTART) {
+      if(AUTOSTART || FORCE_BLUE_AUTO) {
         redWonAuto = false;
       } else {
         bool redPin = digitalRead(SWITCH_RED);
@@ -165,12 +269,11 @@
           redWonAuto = true;
         }
       }
+      Serial.print(F("  Auto winner: "));
+      Serial.println(redWonAuto ? F("RED") : F("BLUE"));
     }
 
   }
-
-  // ==================== DEBUG FUNCTIONS ====================
-
 
   // ==================== LIGHT ANIMATION FUNCTIONS ====================
 
@@ -197,7 +300,7 @@
   void setWhiteChase(CRGB* leds, int numLeds, CRGB baseColor) {
     // Create repeating pattern: 5 blue, 5 white, 5 blue, 5 white...
     // Pattern chases continuously along the strip
-    int offset = (millis() / CHASE_SPEED);  // Continuously increasing offset
+    unsigned long offset = (millis() / CHASE_SPEED);  // Continuously increasing offset
 
     for(int i = 0; i < numLeds; i++) {
       // Determine position in the 10-LED pattern (5 blue + 5 white)
@@ -289,6 +392,15 @@
   void setup() {
     Serial.begin(9600);
     delay(500);
+    Serial.println(F("=== FRC Practice Hub Lights - REBUILT ==="));
+    Serial.print(F("LEDs: "));
+    Serial.print(NUM_LEDS_RED);
+    Serial.print(F(" red / "));
+    Serial.print(NUM_LEDS_BLUE);
+    Serial.println(F(" blue"));
+    Serial.print(F("AUTOSTART: "));
+    Serial.println(AUTOSTART ? F("ON (blue wins auto)") : F("OFF"));
+    Serial.println(F("========================================="));
 
     // Initialize DFPlayer
     dfSerial.begin(9600);
@@ -320,10 +432,37 @@
     bool currentButtonState = digitalRead(BUTTON_PIN);
 
     if(lastButtonState == HIGH && currentButtonState == LOW) {
-      if(currentState == IDLE || currentState == MATCH_OVER) {
-        enterState(AUTO);
+      unsigned long now = millis();
+      if(now - lastButtonPressTime >= DEBOUNCE_TIME) {
+        lastButtonPressTime = now;
+
+        // IR fires first, based on actual game state
+        if(currentState == IDLE || currentState == MATCH_OVER) {
+          IrSender.sendNEC(IR_ADDRESS, 0x1F, 0);
+          Serial.println(F("IR -> 0x1F"));
+        } else {
+          IrSender.sendNEC(IR_ADDRESS, 0x20, 0);
+          Serial.println(F("IR -> 0x20"));
+          delay(1000);
+          IrSender.sendNEC(IR_ADDRESS, 0x2F, 0);
+          Serial.println(F("IR -> 0x2F"));
+          delay(1000);
+          IrSender.sendNEC(IR_ADDRESS, 0x2F, 0);
+          Serial.println(F("IR -> 0x2F"));
+        }
+
+        // Match state change after IR
+        if(currentState == IDLE || currentState == MATCH_OVER) {
+          Serial.println(F(">>> BTN: START"));
+          enterState(AUTO);
+        } else {
+          Serial.println(F(">>> BTN: STOP"));
+          enterState(IDLE);
+        }
       } else {
-        enterState(IDLE);
+        Serial.print(F(">>> BTN: bounce ignored ("));
+        Serial.print(now - lastButtonPressTime);
+        Serial.println(F("ms)"));
       }
     }
     lastButtonState = currentButtonState;
@@ -337,5 +476,6 @@
     }
 
     updateLights();
+    printPeriodicStatus();
     delay(10);
   }
